@@ -2,12 +2,53 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer components {
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-primary-600 to-blue-600 text-white font-semibold text-sm shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 disabled:opacity-60 disabled:pointer-events-none disabled:transform-none;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-slate-900 text-white font-semibold text-sm hover:bg-slate-800 transition-all duration-200;
+  }
+
+  .card {
+    @apply bg-white rounded-xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow duration-200;
+  }
+
+  .section-reveal {
+    @apply opacity-0 translate-y-6 transition-all duration-700 ease-out;
+  }
+
+  .section-reveal-visible {
+    @apply opacity-100 translate-y-0;
+  }
+}
+
 @layer utilities {
   .glass {
-    @apply bg-white bg-opacity-70 backdrop-blur-lg border border-white border-opacity-20 shadow-lg;
+    @apply bg-white/70 backdrop-blur-xl border border-white/40 shadow-lg;
+  }
+
+  .glass-dark {
+    @apply bg-slate-900/80 backdrop-blur-xl border border-white/10 shadow-2xl;
+  }
+
+  .text-gradient {
+    @apply text-transparent bg-clip-text bg-gradient-to-r from-primary-500 via-blue-500 to-indigo-600;
+  }
+
+  .landing-mesh {
+    background:
+      radial-gradient(ellipse 80% 60% at 50% -10%, rgba(14, 165, 233, 0.18), transparent),
+      radial-gradient(ellipse 50% 40% at 90% 20%, rgba(99, 102, 241, 0.12), transparent),
+      radial-gradient(ellipse 40% 50% at 10% 60%, rgba(56, 189, 248, 0.1), transparent);
   }
 }
 
 body {
   @apply bg-slate-50 text-slate-800 antialiased;
+}
+
+html {
+  scroll-behavior: smooth;
 }

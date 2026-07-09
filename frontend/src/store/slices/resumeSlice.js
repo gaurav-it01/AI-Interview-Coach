@@ -63,6 +63,8 @@ export const resumeSlice = createSlice({
     builder
       .addCase(uploadResume.pending, (state) => {
         state.isLoading = true;
+        state.isError = false;
+        state.message = '';
       })
       .addCase(uploadResume.fulfilled, (state, action) => {
         state.isLoading = false;

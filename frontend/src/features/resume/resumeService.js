@@ -1,4 +1,4 @@
-import axios from 'axios';
+import apiClient from '../apiClient';
 
 const API_URL = '/api/resume/';
 
@@ -11,7 +11,7 @@ const uploadResume = async (resumeData, token) => {
     },
   };
 
-  const response = await axios.post(API_URL, resumeData, config);
+  const response = await apiClient.post(API_URL, resumeData, config);
 
   return response.data;
 };
@@ -24,7 +24,7 @@ const getResumes = async (token) => {
     },
   };
 
-  const response = await axios.get(API_URL, config);
+  const response = await apiClient.get(API_URL, config);
 
   return response.data;
 };

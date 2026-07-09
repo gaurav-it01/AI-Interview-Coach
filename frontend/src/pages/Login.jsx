@@ -1,15 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { login, register, reset } from '../store/slices/authSlice';
+import { login, register, reset, googleLogin } from '../store/slices/authSlice';
 import { toast } from 'react-toastify';
-import { Bot, Mail, Lock, User, ArrowRight, Loader2 } from 'lucide-react';
+import { ArrowRight, ArrowLeft, Loader2 } from 'lucide-react';
+import { GoogleLogin } from '@react-oauth/google';
+
+const rawGoogleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+const googleClientId = rawGoogleClientId && rawGoogleClientId !== 'your-google-oauth-client-id.apps.googleusercontent.com' && rawGoogleClientId.trim() !== '' ? rawGoogleClientId : null;
 
 const Login = () => {
   const location = useLocation();
   const isSignupRoute = location.pathname === '/signup';
-  
-  const [isLogin, setIsLogin] = useState(!isSignupRoute);
+
+  const [step, setStep] = useState(1);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -21,31 +25,26 @@ const Login = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
 
-  const { user, isLoading, isError, isSuccess, message, isAuthenticated } = useSelector(
+  const { isLoading, isError, isSuccess, message, isAuthenticated } = useSelector(
     (state) => state.auth
   );
 
   useEffect(() => {
-    if (isError) {
-      toast.error(message);
-    }
-
-    if (isSuccess && isLogin && isAuthenticated) {
-      // Login successful
-      navigate('/dashboard');
-    } else if (isSuccess && !isLogin && message) {
-      // Registration successful (needs verification)
-      toast.success(message);
-      setIsLogin(true); // switch to login view
-      navigate('/login');
-    }
-
-    dispatch(reset());
-  }, [user, isError, isSuccess, message, isAuthenticated, navigate, dispatch, isLogin]);
+    setStep(1);
+  }, [location.pathname]);
 
   useEffect(() => {
-    setIsLogin(!isSignupRoute);
-  }, [isSignupRoute]);
+    if (isSuccess && isAuthenticated) {
+      navigate('/dashboard');
+      dispatch(reset());
+      return;
+    }
+
+    if (isError && message) {
+      toast.error(message);
+      dispatch(reset());
+    }
+  }, [isError, isSuccess, message, isAuthenticated, navigate, dispatch]);
 
   const onChange = (e) => {
     setFormData((prevState) => ({
@@ -54,144 +53,179 @@ const Login = () => {
     }));
   };
 
-  const handleSubmit = (e) => {
+  const handleNextStep = (e) => {
+    e.preventDefault();
+    if (!email.trim()) {
+      toast.error('Please enter a valid email address');
+      return;
+    }
+    setStep(2);
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!isLogin) {
-      if (!name || !email || !password) {
+    if (isSignupRoute) {
+      if (!name.trim() || !password) {
         toast.error('Please fill in all fields');
         return;
       }
-      const userData = { name, email, password };
-      dispatch(register(userData));
-    } else {
-      if (!email || !password) {
-        toast.error('Please fill in all fields');
-        return;
+
+      try {
+        const result = await dispatch(register({ name: name.trim(), email: email.trim(), password })).unwrap();
+        toast.success(result.message || 'Account created successfully!');
+        await dispatch(login({ email: email.trim(), password })).unwrap();
+      } catch (err) {
+        toast.error(typeof err === 'string' ? err : 'Registration failed');
+        dispatch(reset());
       }
-      const userData = { email, password };
-      dispatch(login(userData));
+      return;
     }
+
+    if (!password) {
+      toast.error('Please enter your password');
+      return;
+    }
+
+    dispatch(login({ email: email.trim(), password }));
   };
 
   const toggleMode = () => {
-    setIsLogin(!isLogin);
-    navigate(isLogin ? '/signup' : '/login');
+    setStep(1);
+    navigate(isSignupRoute ? '/login' : '/signup');
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
-      <div className="max-w-md w-full glass rounded-3xl p-8 relative overflow-hidden">
-        {/* Decorative elements */}
-        <div className="absolute top-0 right-0 -mt-10 -mr-10 w-40 h-40 bg-primary-100 rounded-full blur-3xl opacity-50"></div>
-        <div className="absolute bottom-0 left-0 -mb-10 -ml-10 w-40 h-40 bg-blue-100 rounded-full blur-3xl opacity-50"></div>
-        
-        <div className="relative z-10">
-          <div className="flex justify-center mb-8">
-            <div className="w-16 h-16 bg-primary-600 rounded-2xl flex items-center justify-center shadow-lg shadow-primary-500/30">
-              <Bot className="w-8 h-8 text-white" />
-            </div>
-          </div>
-          
-          <h2 className="text-3xl font-bold text-center text-slate-800 mb-2">
-            {isLogin ? 'Welcome back' : 'Create an account'}
-          </h2>
-          <p className="text-center text-slate-500 mb-8">
-            {isLogin ? 'Enter your details to access your account' : 'Sign up to start your interview prep journey'}
-          </p>
+    <div className="min-h-screen landing-mesh flex items-center justify-center px-4 font-sans py-8">
+      <div className="max-w-[440px] w-full glass rounded-2xl p-8 sm:p-10 shadow-xl border border-white/60 relative">
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {!isLogin && (
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Full Name</label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <User className="h-5 w-5 text-slate-400" />
-                  </div>
-                  <input 
-                    type="text" 
-                    name="name"
-                    value={name}
-                    onChange={onChange}
-                    className="block w-full pl-10 px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition-all" 
-                    placeholder="John Doe" 
-                    required={!isLogin} 
-                  />
+        {step === 2 && (
+          <button
+            onClick={() => setStep(1)}
+            className="absolute top-8 left-8 text-slate-400 hover:text-slate-600 transition-colors"
+            aria-label="Back to email"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+        )}
+
+        <h2 className="text-[28px] font-semibold text-center text-slate-900 mb-8 mt-2 tracking-tight">
+          {isSignupRoute ? 'Create Account' : 'Sign In'}
+        </h2>
+
+        {step === 1 ? (
+          <div className="space-y-6">
+            <div className="w-full flex justify-center">
+              {googleClientId ? (
+                <GoogleLogin
+                  onSuccess={(credentialResponse) => {
+                    dispatch(googleLogin(credentialResponse.credential));
+                  }}
+                  onError={() => {
+                    toast.error('Google Sign In failed');
+                  }}
+                  shape="rectangular"
+                  text={isSignupRoute ? 'signup_with' : 'signin_with'}
+                  width="100%"
+                  size="large"
+                />
+              ) : (
+                <div className="w-full rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                  Google sign-in is not configured. Add VITE_GOOGLE_CLIENT_ID to frontend/.env to enable it.
                 </div>
-              </div>
-            )}
-            
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Email Address</label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Mail className="h-5 w-5 text-slate-400" />
-                </div>
-                <input 
-                  type="email" 
+              )}
+            </div>
+
+            <div className="relative flex items-center py-2">
+              <div className="flex-grow border-t border-slate-200"></div>
+              <span className="flex-shrink-0 mx-4 text-slate-500 text-[15px]">
+                or continue with email
+              </span>
+              <div className="flex-grow border-t border-slate-200"></div>
+            </div>
+
+            <form onSubmit={handleNextStep}>
+              <div className="flex items-center gap-3">
+                <input
+                  type="email"
                   name="email"
                   value={email}
                   onChange={onChange}
-                  className="block w-full pl-10 px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition-all" 
-                  placeholder="you@example.com" 
-                  required 
+                  className="flex-1 w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-slate-900 focus:border-slate-900 outline-none transition-all text-[15px]"
+                  placeholder="Email address"
+                  aria-label="Email address"
+                  autoFocus
+                  required
                 />
+                <button
+                  type="submit"
+                  className="p-3 border border-slate-200 rounded-xl text-slate-500 hover:bg-slate-50 hover:text-slate-800 transition-colors focus:outline-none focus:ring-2 focus:ring-slate-900 flex-shrink-0"
+                  aria-label="Continue"
+                >
+                  <ArrowRight className="w-5 h-5" />
+                </button>
               </div>
+            </form>
+
+            <p className="mt-8 text-center text-sm text-slate-500">
+              {isSignupRoute ? 'Already have an account? ' : "Don't have an account? "}
+              <button type="button" onClick={toggleMode} className="font-medium text-slate-800 hover:text-slate-900 focus:outline-none focus:underline">
+                {isSignupRoute ? 'Sign in' : 'Sign up'}
+              </button>
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-300">
+            <div className="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-600 text-[15px] font-medium flex justify-between items-center mb-6">
+              {email}
+              <button type="button" onClick={() => setStep(1)} className="text-xs text-primary-600 hover:underline">Edit</button>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Password</label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Lock className="h-5 w-5 text-slate-400" />
+            <form onSubmit={handleSubmit} className="space-y-4">
+              {isSignupRoute && (
+                <div>
+                  <input
+                    type="text"
+                    name="name"
+                    value={name}
+                    onChange={onChange}
+                    className="block w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-slate-900 focus:border-slate-900 outline-none transition-all text-[15px]"
+                    placeholder="Full Name"
+                    aria-label="Full Name"
+                    required
+                  />
                 </div>
-                <input 
-                  type="password" 
+              )}
+
+              <div>
+                <input
+                  type="password"
                   name="password"
                   value={password}
                   onChange={onChange}
-                  className="block w-full pl-10 px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition-all" 
-                  placeholder="••••••••" 
-                  required 
+                  className="block w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-slate-900 focus:border-slate-900 outline-none transition-all text-[15px]"
+                  placeholder="Password"
+                  aria-label="Password"
+                  autoFocus
+                  required
+                  minLength={6}
                 />
               </div>
-            </div>
 
-            {isLogin && (
-              <div className="flex items-center justify-between mt-4">
-                <div className="flex items-center">
-                  <input id="remember-me" type="checkbox" className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-slate-300 rounded" />
-                  <label htmlFor="remember-me" className="ml-2 block text-sm text-slate-700">Remember me</label>
-                </div>
-                <div className="text-sm">
-                  <a href="#" className="font-medium text-primary-600 hover:text-primary-500">Forgot your password?</a>
-                </div>
-              </div>
-            )}
-
-            <button 
-              type="submit" 
-              disabled={isLoading}
-              className="w-full flex justify-center items-center gap-2 py-3 px-4 border border-transparent rounded-xl shadow-lg shadow-primary-500/30 text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-all font-semibold mt-6 disabled:opacity-70 disabled:cursor-not-allowed"
-            >
-              {isLoading ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
-              ) : (
-                <>
-                  {isLogin ? 'Sign In' : 'Sign Up'}
-                  <ArrowRight className="w-5 h-5" />
-                </>
-              )}
-            </button>
-          </form>
-
-          <p className="mt-8 text-center text-sm text-slate-600">
-            {isLogin ? "Don't have an account? " : "Already have an account? "}
-            <button onClick={toggleMode} className="font-medium text-primary-600 hover:text-primary-500 focus:outline-none focus:underline transition duration-150 ease-in-out">
-              {isLogin ? 'Sign up now' : 'Log in here'}
-            </button>
-          </p>
-        </div>
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="w-full flex justify-center items-center gap-2 py-3 px-4 border border-transparent rounded-xl shadow-[0_2px_10px_rgb(0,0,0,0.06)] text-white bg-slate-900 hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-900 transition-all font-medium mt-6 disabled:opacity-70 disabled:cursor-not-allowed text-[15px]"
+              >
+                {isLoading ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <>{isSignupRoute ? 'Create Account' : 'Sign In'}</>
+                )}
+              </button>
+            </form>
+          </div>
+        )}
       </div>
     </div>
   );

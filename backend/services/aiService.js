@@ -1,105 +1,172 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+﻿import Groq from 'groq-sdk';
 
-/**
- * Helper to safely instantiate the Gemini API client.
- * Ensures the API key is present in the environment.
- * @returns {GoogleGenerativeAI} The initialized Generative AI client
- */
-const getGenAIClient = () => {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    throw new Error('GEMINI_API_KEY is missing from environment variables.');
+const GROQ_MODEL = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
+
+function getGroqClient() {
+  const key = process.env.GROQ_API_KEY?.trim();
+  if (!key) {
+    throw new Error(
+      'GROQ_API_KEY is missing. Add it to backend/.env and restart the server.'
+    );
   }
-  return new GoogleGenerativeAI(apiKey);
-};
+  return new Groq({ apiKey: key });
+}
 
-/**
- * Generates technical and behavioral interview questions based on parsed resume text.
- * @param {string} resumeText - The extracted text from the user's PDF resume.
- * @returns {Promise<Array>} Array of generated question objects.
- */
+function isQuotaOrRateLimitError(error) {
+  const status = error?.status || error?.statusCode;
+  const message = String(error?.message || '').toLowerCase();
+  return (
+    status === 429 ||
+    message.includes('quota') ||
+    message.includes('rate limit') ||
+    message.includes('rate_limit') ||
+    message.includes('too many requests')
+  );
+}
+
+function wrapAiError(prefix, error) {
+  if (isQuotaOrRateLimitError(error)) {
+    return new Error(
+      `${prefix}: AI quota or rate limit reached. Please try again later.`
+    );
+  }
+  return new Error(`${prefix}: ${error.message || 'Unknown AI error'}`);
+}
+
+function extractJsonPayload(text) {
+  const trimmed = String(text || '').trim();
+  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const candidate = fenced ? fenced[1].trim() : trimmed;
+
+  try {
+    return JSON.parse(candidate);
+  } catch {
+    const arrayMatch = candidate.match(/\[[\s\S]*\]/);
+    if (arrayMatch) {
+      return JSON.parse(arrayMatch[0]);
+    }
+    throw new Error('AI returned invalid JSON');
+  }
+}
+
+function normalizeArrayPayload(payload, keys) {
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+
+  if (payload && typeof payload === 'object') {
+    for (const key of keys) {
+      if (Array.isArray(payload[key])) {
+        return payload[key];
+      }
+    }
+  }
+
+  throw new Error('AI did not return an array');
+}
+
+function parseJsonArray(text, keys, validator, itemLabel) {
+  const payload = extractJsonPayload(text);
+  const parsed = normalizeArrayPayload(payload, keys);
+
+  if (!parsed.every(validator)) {
+    throw new Error(`AI returned invalid ${itemLabel} objects`);
+  }
+
+  return parsed;
+}
+
+async function callGroq(prompt) {
+  const client = getGroqClient();
+  const completion = await client.chat.completions.create({
+    model: GROQ_MODEL,
+    messages: [
+      {
+        role: 'system',
+        content:
+          'You are a professional interview coach. Respond with valid JSON only. Do not include markdown fences or commentary.',
+      },
+      { role: 'user', content: prompt },
+    ],
+    temperature: 0.6,
+    response_format: { type: 'json_object' },
+  });
+
+  const text = completion.choices?.[0]?.message?.content;
+  if (!text?.trim()) {
+    throw new Error('Empty response from AI');
+  }
+
+  return text;
+}
+
 const generateInterviewQuestions = async (resumeText) => {
   try {
-    const genAI = getGenAIClient();
-    // Use gemini-1.5-flash for faster response times
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-
     const prompt = `
-      Based on the following parsed resume text, generate exactly 5 interview questions.
-      Requirements:
-      - 2 technical questions related to the skills and experience.
-      - 2 HR/Behavioral questions.
-      - 1 project-based question tailored to a specific project. If no projects are found, ask a generic architecture question.
-      
-      Output the questions cleanly as a JSON array of objects with keys "type" (Technical, HR, Project) and "question".
-      Do not wrap the JSON output in markdown formatting blocks like \`\`\`json. Return only the raw JSON array.
-      
-      Resume Text:
-      ${resumeText.substring(0, 3000)}
-    `;
+Generate exactly 5 challenging interview questions based on this resume.
 
-    const result = await model.generateContent(prompt);
-    let responseText = result.response.text().trim();
+Resume text:
+${String(resumeText || '').substring(0, 4000)}
 
-    // Safety generic parsing: Isolate JSON array if there's preamble/postamble
-    const jsonMatch = responseText.match(/\[[\s\S]*\]/);
-    if (jsonMatch) {
-      responseText = jsonMatch[0];
-    }
+Return JSON in this shape:
+{
+  "questions": [
+    { "question": "string", "type": "Technical|Behavioral|Situational|Career" }
+  ]
+}
+`;
 
-    return JSON.parse(responseText);
+    const text = await callGroq(prompt);
+
+    return parseJsonArray(
+      text,
+      ['questions', 'items', 'data'],
+      (item) =>
+        item &&
+        typeof item.question === 'string' &&
+        typeof item.type === 'string',
+      'question'
+    );
   } catch (error) {
-    console.error('Gemini API Error (generateInterviewQuestions):', error);
-
-    if (error.message?.includes('API_KEY_INVALID')) {
-      throw new Error('Invalid Gemini API Key. Please verify your GEMINI_API_KEY in .env.');
-    }
-    throw new Error(`AI Generation Failed: ${error.message.substring(0, 100)}`);
+    throw wrapAiError('AI Generation Failed', error);
   }
 };
 
-/**
- * Evaluates the user's answers to the interview questions.
- * @param {Array} qaPairs - Array of objects containing the question and the user's answer.
- * @returns {Promise<Array>} Array of evaluation objects.
- */
 const evaluateInterviewAnswers = async (qaPairs) => {
   try {
-    const genAI = getGenAIClient();
-    // Use gemini-1.5-flash for evaluation as well
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-
     const prompt = `
-      You are an expert AI Interview Coach. Evaluate the following interview answers.
-      For each question-answer pair, provide:
-      1. Score: out of 10.
-      2. Strengths: What the candidate did well.
-      3. Weaknesses: Where the candidate fell short.
-      4. Suggestions: How to improve the answer.
+Evaluate the following interview answers. For each item, provide:
+- score: integer from 0 to 10
+- strengths: concise string
+- weaknesses: concise string
+- suggestions: actionable improvement advice using STAR when relevant
 
-      Return the result strictly as a JSON array of objects, with each object corresponding to the order of the Q&A pairs provided. 
-      Use keys: "score", "strengths", "weaknesses", "suggestions". Do not wrap in markdown \`\`\`json blocks.
-      
-      Q&A Pairs:
-      ${JSON.stringify(qaPairs)}
-    `;
+Q&A pairs:
+${JSON.stringify(qaPairs, null, 2)}
 
-    const result = await model.generateContent(prompt);
-    let responseText = result.response.text().trim();
+Return JSON in this shape:
+{
+  "evaluations": [
+    { "score": 0, "strengths": "string", "weaknesses": "string", "suggestions": "string" }
+  ]
+}
+`;
 
-    // Safety generic parsing: Isolate JSON array
-    const jsonMatch = responseText.match(/\[[\s\S]*\]/);
-    if (jsonMatch) {
-      responseText = jsonMatch[0];
-    }
+    const text = await callGroq(prompt);
 
-    return JSON.parse(responseText);
+    return parseJsonArray(
+      text,
+      ['evaluations', 'results', 'items', 'data'],
+      (item) =>
+        item &&
+        item.score !== undefined &&
+        typeof item.strengths === 'string' &&
+        typeof item.weaknesses === 'string' &&
+        typeof item.suggestions === 'string',
+      'evaluation'
+    );
   } catch (error) {
-    console.error('Gemini Evaluation Error (evaluateInterviewAnswers):', error);
-    if (error.message?.includes('API_KEY_INVALID')) {
-      throw new Error('Invalid Gemini API Key. Please verify your GEMINI_API_KEY in .env.');
-    }
-    throw new Error(`AI Evaluation Failed: ${error.message.substring(0, 100)}`);
+    throw wrapAiError('AI Evaluation Failed', error);
   }
 };
 
