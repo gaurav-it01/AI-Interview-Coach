@@ -7,7 +7,8 @@ import { ArrowRight, ArrowLeft, Loader2 } from 'lucide-react';
 import { GoogleLogin } from '@react-oauth/google';
 
 const rawGoogleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-const googleClientId = rawGoogleClientId && rawGoogleClientId !== 'your-google-oauth-client-id.apps.googleusercontent.com' && rawGoogleClientId.trim() !== '' ? rawGoogleClientId : null;
+console.log(rawGoogleClientId)
+const googleClientId = rawGoogleClientId;
 
 const Login = () => {
   const location = useLocation();
