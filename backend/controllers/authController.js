@@ -6,7 +6,7 @@ import generateToken from '../utils/generateToken.js';
 import sendEmail from '../utils/sendEmail.js';
 import { isNonEmptyString, normalizeEmail } from '../utils/validators.js';
 
-const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID || 'UNCONFIGURED');
+const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET,process.env.GOOGLE_REDIRECT_URI);
 const shouldAutoVerifyEmail = process.env.AUTO_VERIFY_EMAIL !== 'false';
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 

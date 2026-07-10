@@ -21,6 +21,7 @@ const logout = () => {
 
 const googleLogin = async (credential) => {
   const response = await apiClient.post(`${API_URL}google`, { credential });
+  console.log(`${API_URL}google`,credential)
   if (response.data) {
     localStorage.setItem('user', JSON.stringify(response.data));
   }

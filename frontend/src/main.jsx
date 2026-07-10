@@ -7,7 +7,7 @@ import './index.css';
 import App from './App.jsx';
 
 const rawGoogleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-const googleClientId = rawGoogleClientId && rawGoogleClientId !== 'your-google-oauth-client-id.apps.googleusercontent.com' && rawGoogleClientId.trim() !== '' ? rawGoogleClientId : null;
+const googleClientId = rawGoogleClientId
 const app = <App />;
 
 createRoot(document.getElementById('root')).render(
