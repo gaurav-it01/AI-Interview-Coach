@@ -1,11 +1,6 @@
 import axios from 'axios';
 
-/**
- * Normalize API base URL.
- * - Empty → use relative /api/* (Vite dev proxy → backend)
- * - http://localhost:5000 → backend root; services still use /api/... paths
- * - Accidental .../api suffix is stripped to avoid /api/api/... double paths
- */
+
 function resolveApiBaseUrl() {
   let base = import.meta.env.VITE_API_URL?.trim().replace(/\/$/, '') || '';
 

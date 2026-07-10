@@ -91,7 +91,7 @@ const registerUser = asyncHandler(async (req, res) => {
       user.verificationToken = undefined;
       await user.save();
     } else {
-      const verifyUrl = `${process.env.CLIENT_URL || 'http://localhost:5173'}/verify/${verificationToken}`;
+      const verifyUrl = `${process.env.CLIENT_URL || 'https://ai-interview-coach-liard.vercel.app'}/verify/${verificationToken}`;
 
       try {
         await sendEmail({
