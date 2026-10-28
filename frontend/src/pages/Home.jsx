@@ -131,7 +131,7 @@ const Home = () => {
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans overflow-x-hidden landing-mesh">
       {/* ── Navbar ── */}
       <nav
-        className={`w-full px-4 sm:px-6 lg:px-8 py-3.5 flex items-center justify-between sticky top-0 z-50 transition-all duration-300 ${
+        className={`w-full px-4 sm:px-6 lg:px-8 py-3.5 flex items-center justify-between fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
           scrolled
             ? 'bg-white/80 backdrop-blur-xl border-b border-slate-200/80 shadow-sm'
             : 'bg-transparent border-b border-transparent'
@@ -619,9 +619,9 @@ const Home = () => {
 
           <div className="pt-8 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3 text-sm">
             <p>&copy; {new Date().getFullYear()} AI Interview Coach. All rights reserved.</p>
-            <p className="text-slate-500">
+            {/* <p className="text-slate-500">
               Built by <span className="text-slate-300 font-medium">Gaurav Chauhan</span>
-            </p>
+            </p> */}
           </div>
         </div>
       </footer>
